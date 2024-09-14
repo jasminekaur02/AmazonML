@@ -1,7 +1,15 @@
 # src/models/entity_predictor.py
+import os
 import tensorflow as tf
 from tensorflow.keras import layers, models
-from src.data_preparation import prepare_data
+import sys
+import os
+
+# Add the src directory to the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+
+from data_preparation import prepare_data  # Now this should work
+
 
 def create_model():
     model = models.Sequential()

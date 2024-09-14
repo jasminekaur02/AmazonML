@@ -1,4 +1,3 @@
-# src/utils.py
 import requests
 import os
 import pandas as pd
@@ -30,11 +29,17 @@ def download_images_from_csv(csv_file, save_dir='images'):
     
     # Download each image
     for link in df['image_link']:
+        image_name = os.path.join(save_dir, link.split('/')[-1])
+        
+        # Skip if the image already exists
+        if os.path.exists(image_name):
+            print(f"Image already exists: {image_name}")
+            continue
+        
         try:
             print(f"Downloading: {link}")  # Debugging statement
             response = requests.get(link)
             response.raise_for_status()  # Raise an error for bad responses
-            image_name = os.path.join(save_dir, link.split('/')[-1])
             with open(image_name, 'wb') as f:
                 f.write(response.content)
             print(f"Downloaded: {image_name}")
