@@ -29,20 +29,13 @@ def load_data(image_dir, csv_file):
         
         image = cv2.resize(image, (128, 128))  # Resize to fit model input
         images.append(image)
-        labels.append(row['entity_value'])  # Assuming 'entity_value' is the target column
+        
+        # Convert the label to a numeric type
+        label = row['entity_value']
+        try:
+            labels.append(float(label))  # Convert to float (or int if applicable)
+        except ValueError:
+            print(f"Warning: Unable to convert label '{label}' to float. Skipping this entry.")
+            continue
 
     return np.array(images), np.array(labels)
-
-def prepare_data():
-    """
-    Prepare training and validation data.
-
-    Returns:
-    - X_train: Training images.
-    - X_val: Validation images.
-    - y_train: Training labels.
-    - y_val: Validation labels.
-    """
-    images, labels = load_data('images/', 'dataset/train.csv')
-    X_train, X_val, y_train, y_val = train_test_split(images, labels, test_size=0.2, random_state=42)
-    return X_train, X_val, y_train, y_val

@@ -4,16 +4,23 @@ import tensorflow as tf
 from tensorflow.keras import layers, models
 import sys
 import os
-
+from src.data_preparation import prepare_data  # Now this should work
 # Add the src directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-from data_preparation import prepare_data  # Now this should work
+
 
 
 def create_model():
+    """
+    Create a Convolutional Neural Network (CNN) model.
+    
+    Returns:
+    - model: Compiled Keras model.
+    """
     model = models.Sequential()
-    model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 3)))
+    model.add(layers.Input(shape=(128, 128, 3)))  # Use Input layer
+    model.add(layers.Conv2D(32, (3, 3), activation='relu'))
     model.add(layers.MaxPooling2D((2, 2)))
     model.add(layers.Conv2D(64, (3, 3), activation='relu'))
     model.add(layers.MaxPooling2D((2, 2)))
