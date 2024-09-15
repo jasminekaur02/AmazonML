@@ -1,91 +1,87 @@
-import pandas as pd
-import numpy as np
-import cv2
 import os
-from sklearn.model_selection import train_test_split
+import torch
+import torchvision.models as models
+import torchvision.transforms as transforms
+from PIL import Image
+import pandas as pd
 
-def convert_label_to_float(label):
+# Preprocess the image for ResNet (example)
+preprocess = transforms.Compose([
+    transforms.Resize(256),
+    transforms.CenterCrop(224),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+
+def extract_features_from_image(model, image_path):
     """
-    Convert various measurement formats to a float.
-    
-    Parameters:
-    - label: The label string to convert.
+    Extracts features from an image using a pre-trained model.
+
+    Args:
+    - model: Pre-trained PyTorch model.
+    - image_path: Path to the image.
 
     Returns:
-    - float value of the label or None if conversion fails.
+    - features: Extracted features as a numpy array.
     """
     try:
-        # Remove any non-numeric characters except for decimal points
-        numeric_value = ''.join(filter(lambda x: x.isdigit() or x in ['.', ' '], label)).strip()
-        if ' ' in numeric_value:
-            # If there are multiple numbers, take the first one
-            numeric_value = numeric_value.split()[0]
-        return float(numeric_value)
-    except ValueError:
+        img = Image.open(image_path)
+        img_tensor = preprocess(img).unsqueeze(0)  # Add batch dimension
+
+        # Extract features
+        with torch.no_grad():
+            features = model(img_tensor).squeeze().numpy()
+        
+        return features
+    except Exception as e:
+        print(f"Error processing image {image_path}: {e}")
         return None
 
-def load_data_in_batches(image_dir, csv_file, batch_size):
+def prepare_data(csv_file, image_dir='images', model=None, limit=100):
     """
-    Load images and labels from the specified CSV file in batches.
+    Prepares data and extracts features using a pre-trained model.
 
-    Parameters:
+    Args:
+    - csv_file: Path to the CSV file.
     - image_dir: Directory where images are stored.
-    - csv_file: Path to the CSV file containing image links and labels.
-    - batch_size: Number of samples to load in each batch.
-
-    Yields:
-    - A tuple of (images, labels) for each batch.
-    """
-    df = pd.read_csv(csv_file)
-    total_samples = len(df)
-    
-    for start in range(0, total_samples, batch_size):
-        end = min(start + batch_size, total_samples)
-        images = []
-        labels = []
-        
-        for index in range(start, end):
-            img_path = os.path.join(image_dir, df['image_link'][index].split('/')[-1])
-            try:
-                image = cv2.imread(img_path)
-                if image is None:
-                    raise ValueError(f"Image not found or cannot be loaded: {img_path}")
-                
-                image = cv2.resize(image, (128, 128))  # Resize to fit model input
-                images.append(image)
-                
-                # Convert the label to a numeric type
-                label = df['entity_value'][index]
-                numeric_label = convert_label_to_float(label)
-                if numeric_label is not None:
-                    labels.append(numeric_label)
-                else:
-                    print(f"Warning: Unable to convert label '{label}' to float. Skipping this entry.")
-            except Exception as e:
-                print(f"Error processing {img_path}: {e}. Skipping this entry.")
-        
-        yield np.array(images), np.array(labels)
-
-def prepare_data(batch_size=32):
-    """
-    Prepare training and validation data in batches.
+    - model: Pre-trained PyTorch model for feature extraction.
+    - limit: The number of images to process.
 
     Returns:
-    - X_train: Training images.
-    - X_val: Validation images.
-    - y_train: Training labels.
-    - y_val: Validation labels.
+    - features: Extracted features for each image.
+    - entity_data: Corresponding entity information.
     """
-    images, labels = [], []
+    df = pd.read_csv(csv_file)
+    features = []
+    entity_data = []
+
+    # Process only the first `limit` images
+    for i, row in df.iterrows():
+        if i >= limit:
+            break
+
+        image_path = os.path.join(image_dir, row['image_link'].split('/')[-1])
+        
+        # Extract features using the pre-trained model
+        image_features = extract_features_from_image(model, image_path)
+        if image_features is not None:
+            features.append(image_features)
+
+            # Store the entity data
+            entity_info = {
+                'entity_name': row['entity_name'],
+                'entity_value': row['entity_value']
+            }
+            entity_data.append(entity_info)
     
-    for batch_images, batch_labels in load_data_in_batches('images/', 'dataset/train.csv', batch_size):
-        images.extend(batch_images)
-        labels.extend(batch_labels)
+    return features, entity_data
 
-    # Convert lists to numpy arrays
-    images = np.array(images)
-    labels = np.array(labels)
+if __name__ == "__main__":
+    # Load pre-trained ResNet model
+    resnet_model = models.resnet50(pretrained=True)
+    resnet_model = torch.nn.Sequential(*list(resnet_model.children())[:-1])  # Remove classification layer
 
-    # Split the data into training and validation sets
-    X_train, X_val, y_train, y_val = train_test_split(images, labels, test_size=0.2, random_state=42)
-    return X_train, X_val, y_train, y_val
+    # Prepare data (limit to 100 images)
+    csv_file = 'dataset/train.csv'
+    features, entity_data = prepare_data(csv_file, model=resnet_model, limit=100)
+    print(f"Extracted {len(features)} feature vectors.")
